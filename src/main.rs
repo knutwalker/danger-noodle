@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
 use rand::prelude::*;
 use std::{
+    collections::VecDeque,
     ops::Neg,
     ops::{Deref, DerefMut},
     time::Duration,
@@ -93,7 +94,7 @@ fn danger_noodle_moves(
     mut segments: Query<(&DangerNoodleSegment, &mut Position)>,
 ) {
     let dir: Option<Direction> = keyboard_input
-        .get_pressed()
+        .get_just_pressed()
         .filter_map(|input| match input {
             KeyCode::Left => Some(Direction::Left),
             KeyCode::Right => Some(Direction::Right),
@@ -105,16 +106,19 @@ fn danger_noodle_moves(
     for (mut head, mut pos) in heads.iter_mut() {
         let current_direction = head.direction;
         if let Some(dir) = dir {
-            if dir != current_direction && dir != -current_direction {
-                head.next_direction = Some(dir);
-            } else {
-                head.next_direction = None
-            }
+            head.next_directions.push_back(dir);
         }
         if danger_noodle_timer.finished {
             // update head
             let mut next_seg_pos = *pos;
-            let dir = head.next_direction.take().unwrap_or(head.direction);
+            let dir = loop {
+                if let Some(dir) = head.next_directions.pop_front() {
+                    if dir != current_direction && dir != -current_direction {
+                        break dir;
+                    }
+                }
+                break head.direction;
+            };
             head.direction = dir;
             match dir {
                 Direction::Left => pos.x -= 1,
@@ -254,10 +258,7 @@ fn spawn_new_danger_noodle(mut commands: Commands, materials: &Materials) {
             sprite: Sprite::new(Vec2::new(10.0, 10.0)),
             ..Default::default()
         })
-        .with(DangerNoodleHead {
-            direction: Direction::Up,
-            next_direction: None,
-        })
+        .with(DangerNoodleHead::default())
         .with(Position { x: 3, y: 3 })
         .with(Size::square(0.8));
 }
@@ -289,9 +290,10 @@ impl Size {
     }
 }
 
+#[derive(Debug, Default)]
 struct DangerNoodleHead {
     direction: Direction,
-    next_direction: Option<Direction>,
+    next_directions: VecDeque<Direction>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -301,6 +303,13 @@ enum Direction {
     Up,
     Down,
 }
+
+impl Default for Direction {
+    fn default() -> Self {
+        Direction::Up
+    }
+}
+
 impl Neg for Direction {
     type Output = Self;
 
