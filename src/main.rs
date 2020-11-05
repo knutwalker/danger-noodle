@@ -20,6 +20,8 @@ fn main() {
             title: "Danger! noooodle".to_string(),
             width: 2000,
             height: 2000,
+            resizable: false,
+            cursor_visible: false,
             ..Default::default()
         })
         .add_resource(DangerNoodleMoveTimer(Timer::new(
