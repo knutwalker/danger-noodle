@@ -10,22 +10,22 @@ repository = "https://github.com/knutwalker/danger-noodle/"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = "0.3.0"
 rand = "0.7.3"
-color-eyre = { git = "https://github.com/knutwalker/color-eyre", branch = "only-issue-url", default-features = false, features = ["issue-url"] }
-eyre = "0.6.2"
 
-[dev-dependencies]
-test-case = "1.0.0"
-pretty_assertions = "0.6.1"
-
-[profile.dev.package.backtrace]
-opt-level = 3
+[dependencies.bevy]
+version = "0.3.0"
+default-features = false
+features = [
+    "bevy_wgpu",
+    "bevy_winit",
+    "render",
+]
 
 [profile.release]
 codegen-units = 1
+opt-level = 2
+panic = 'abort'
+lto = true
 debug = false
 debug-assertions = false
-lto = true
-opt-level = 2
 rpath = false
