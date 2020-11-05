@@ -89,7 +89,7 @@ fn danger_noodle_timer(time: Res<Time>, mut danger_noodle_timer: ResMut<DangerNo
 
 fn danger_noodle_moves(
     keyboard_input: Res<Input<KeyCode>>,
-    danger_noodle_timer: ResMut<DangerNoodleMoveTimer>,
+    danger_noodle_timer: Res<DangerNoodleMoveTimer>,
     mut last_tail_pos: ResMut<LastTailPosition>,
     mut game_over_events: ResMut<Events<GameOverEvent>>,
     mut heads: Query<(&mut DangerNoodleHead, &mut Position)>,
@@ -185,8 +185,11 @@ fn danger_noodle_grows(
     growth_events: Res<Events<GrowthEvent>>,
     mut growth_reader: Local<EventReader<GrowthEvent>>,
     last_tail_pos: Res<LastTailPosition>,
+    mut danger_noodle_timer: ResMut<DangerNoodleMoveTimer>,
 ) {
     if growth_reader.iter(&growth_events).next().is_some() {
+        // update danger noodle speed
+        danger_noodle_timer.duration *= 0.98;
         let last_position = **last_tail_pos;
         spawn_segment(&mut commands, &materials.segment_material, last_position);
     }
