@@ -7,6 +7,7 @@ fn main() {
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup")
         .add_startup_system_to_stage("game_setup", game_setup.system())
+        .add_system(danger_noodle_movement.system())
         .add_plugins(DefaultPlugins)
         .run();
 }
@@ -28,6 +29,25 @@ fn game_setup(mut commands: Commands, materials: Res<Materials>) {
         .with(DangerNoodleHead);
 }
 
+fn danger_noodle_movement(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut head_positions: Query<(&DangerNoodleHead, &mut Transform)>,
+) {
+    for (_head, mut transform) in head_positions.iter_mut() {
+        if keyboard_input.pressed(KeyCode::Left) {
+            *transform.translation.x_mut() -= 2.;
+        }
+        if keyboard_input.pressed(KeyCode::Right) {
+            *transform.translation.x_mut() += 2.;
+        }
+        if keyboard_input.pressed(KeyCode::Down) {
+            *transform.translation.y_mut() -= 2.;
+        }
+        if keyboard_input.pressed(KeyCode::Up) {
+            *transform.translation.y_mut() += 2.;
+        }
+    }
+}
 struct DangerNoodleHead;
 struct Materials {
     head_material: Handle<ColorMaterial>,
