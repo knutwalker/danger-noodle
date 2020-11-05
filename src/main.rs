@@ -28,6 +28,7 @@ fn main() {
         .add_resource(DangerNoodleSegments::default())
         .add_resource(LastTailPosition::default())
         .add_event::<GrowthEvent>()
+        .add_event::<GameOverEvent>()
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup")
         .add_startup_system_to_stage("game_setup", game_setup.system())
@@ -38,6 +39,7 @@ fn main() {
         .add_system(danger_noodle_grows.system())
         .add_system(position_translation.system())
         .add_system(size_scaling.system())
+        .add_system(game_over.system())
         .add_plugins(DefaultPlugins)
         .run();
 }
@@ -52,28 +54,11 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
 }
 
 fn game_setup(
-    mut commands: Commands,
+    commands: Commands,
     materials: Res<Materials>,
-    mut segments: ResMut<DangerNoodleSegments>,
+    segments: ResMut<DangerNoodleSegments>,
 ) {
-    let first_segment = spawn_segment(
-        &mut commands,
-        &materials.segment_material,
-        Position { x: 3, y: 2 },
-    );
-    segments.push(first_segment);
-    commands
-        .spawn(SpriteComponents {
-            material: materials.head_material.clone(),
-            sprite: Sprite::new(Vec2::new(10.0, 10.0)),
-            ..Default::default()
-        })
-        .with(DangerNoodleHead {
-            direction: Direction::Up,
-            next_direction: None,
-        })
-        .with(Position { x: 3, y: 3 })
-        .with(Size::square(0.8));
+    spawn_new_danger_noodle(commands, &materials, segments);
 }
 
 fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Sprite)>) {
@@ -108,6 +93,7 @@ fn danger_noodle_moves(
     keyboard_input: Res<Input<KeyCode>>,
     danger_noodle_timer: ResMut<DangerNoodleMoveTimer>,
     mut last_tail_pos: ResMut<LastTailPosition>,
+    mut game_over_events: ResMut<Events<GameOverEvent>>,
     mut heads: Query<(&mut DangerNoodleHead, &mut Position)>,
     mut segments: Query<(&DangerNoodleSegment, &mut Position)>,
 ) {
@@ -131,13 +117,8 @@ fn danger_noodle_moves(
             }
         }
         if danger_noodle_timer.finished {
-            // update tails
-            let mut last_pos = *pos;
-            for (_segment, mut segment_pos) in segments.iter_mut() {
-                last_pos = std::mem::replace(&mut *segment_pos, last_pos);
-            }
-            **last_tail_pos = last_pos;
             // update head
+            let mut next_seg_pos = *pos;
             let dir = head.next_direction.take().unwrap_or(head.direction);
             head.direction = dir;
             match dir {
@@ -145,6 +126,20 @@ fn danger_noodle_moves(
                 Direction::Right => pos.x += 1,
                 Direction::Up => pos.y += 1,
                 Direction::Down => pos.y -= 1,
+            }
+            // update tails
+            let head_pos = *pos;
+            for (_segment, mut segment_pos) in segments.iter_mut() {
+                if next_seg_pos == head_pos {
+                    game_over_events.send(GameOverEvent);
+                }
+                next_seg_pos = std::mem::replace(&mut *segment_pos, next_seg_pos);
+            }
+            **last_tail_pos = next_seg_pos;
+
+            if pos.x < 0 || pos.y < 0 || pos.x as u32 >= ARENA_WIDTH || pos.y as u32 >= ARENA_HEIGHT
+            {
+                game_over_events.send(GameOverEvent);
             }
         }
     }
@@ -219,6 +214,55 @@ fn food_spawner(
             })
             .with(Size::square(0.7));
     }
+}
+
+fn game_over(
+    mut commands: Commands,
+    mut reader: Local<EventReader<GameOverEvent>>,
+    game_over_events: Res<Events<GameOverEvent>>,
+    materials: Res<Materials>,
+    segments_res: ResMut<DangerNoodleSegments>,
+    segments: Query<(Entity, &DangerNoodleSegment)>,
+    foods: Query<(Entity, &Food)>,
+    heads: Query<(Entity, &DangerNoodleHead)>,
+) {
+    if reader.iter(&game_over_events).next().is_some() {
+        for (ent, _) in segments.iter() {
+            commands.despawn(ent);
+        }
+        for (ent, _) in foods.iter() {
+            commands.despawn(ent);
+        }
+        for (ent, _) in heads.iter() {
+            commands.despawn(ent);
+        }
+        spawn_new_danger_noodle(commands, &materials, segments_res);
+    }
+}
+
+fn spawn_new_danger_noodle(
+    mut commands: Commands,
+    materials: &Materials,
+    mut segments: ResMut<DangerNoodleSegments>,
+) {
+    let first_segment = spawn_segment(
+        &mut commands,
+        &materials.segment_material,
+        Position { x: 3, y: 2 },
+    );
+    **segments = vec![first_segment];
+    commands
+        .spawn(SpriteComponents {
+            material: materials.head_material.clone(),
+            sprite: Sprite::new(Vec2::new(10.0, 10.0)),
+            ..Default::default()
+        })
+        .with(DangerNoodleHead {
+            direction: Direction::Up,
+            next_direction: None,
+        })
+        .with(Position { x: 3, y: 3 })
+        .with(Size::square(0.8));
 }
 
 struct Materials {
@@ -350,3 +394,6 @@ impl DerefMut for LastTailPosition {
         &mut self.0
     }
 }
+
+#[derive(Debug)]
+struct GameOverEvent;
