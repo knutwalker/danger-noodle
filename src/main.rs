@@ -4,12 +4,18 @@ use bevy::prelude::*;
 
 fn main() {
     App::build()
+        .add_startup_system(set_title.system())
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup")
         .add_startup_system_to_stage("game_setup", game_setup.system())
         .add_system(danger_noodle_movement.system())
         .add_plugins(DefaultPlugins)
         .run();
+}
+
+fn set_title(mut windows: ResMut<Windows>) {
+    let window = windows.get_primary_mut().unwrap();
+    window.set_title("Danger! noooodle".into());
 }
 
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
