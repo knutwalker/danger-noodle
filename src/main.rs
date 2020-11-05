@@ -54,6 +54,7 @@ fn game_setup(mut commands: Commands, materials: Res<Materials>) {
         })
         .with(DangerNoodleHead {
             direction: Direction::Up,
+            next_direction: None,
         })
         .with(Position { x: 3, y: 3 })
         .with(Size::square(0.8));
@@ -90,35 +91,36 @@ fn danger_noodle_timer(time: Res<Time>, mut danger_noodle_timer: ResMut<DangerNo
 fn danger_noodle_movement(
     keyboard_input: Res<Input<KeyCode>>,
     danger_noodle_timer: ResMut<DangerNoodleMoveTimer>,
-    mut heads: Query<(Entity, &mut DangerNoodleHead)>,
-    mut positions: Query<&mut Position>,
+    mut heads: Query<(&mut DangerNoodleHead, &mut Position)>,
 ) {
-    if !danger_noodle_timer.finished {
-        return;
-    }
-    for (head_entity, mut head) in heads.iter_mut() {
-        let mut head_pos = positions.get_mut(head_entity).unwrap();
+    let dir: Option<Direction> = keyboard_input
+        .get_pressed()
+        .filter_map(|input| match input {
+            KeyCode::Left => Some(Direction::Left),
+            KeyCode::Right => Some(Direction::Right),
+            KeyCode::Up => Some(Direction::Up),
+            KeyCode::Down => Some(Direction::Down),
+            _ => None,
+        })
+        .next();
+    for (mut head, mut pos) in heads.iter_mut() {
         let current_direction = head.direction;
-        let dir = if keyboard_input.pressed(KeyCode::Left) {
-            Direction::Left
-        } else if keyboard_input.pressed(KeyCode::Right) {
-            Direction::Right
-        } else if keyboard_input.pressed(KeyCode::Down) {
-            Direction::Down
-        } else if keyboard_input.pressed(KeyCode::Up) {
-            Direction::Up
-        } else {
-            current_direction
-        };
-        if dir != -current_direction && dir != current_direction {
-            head.direction = dir;
+        if let Some(dir) = dir {
+            if dir != current_direction && dir != -current_direction {
+                head.next_direction = Some(dir);
+            } else {
+                head.next_direction = None
+            }
         }
-
-        match head.direction {
-            Direction::Left => head_pos.x -= 1,
-            Direction::Right => head_pos.x += 1,
-            Direction::Up => head_pos.y += 1,
-            Direction::Down => head_pos.y -= 1,
+        if danger_noodle_timer.finished {
+            let dir = head.next_direction.take().unwrap_or(head.direction);
+            head.direction = dir;
+            match dir {
+                Direction::Left => pos.x -= 1,
+                Direction::Right => pos.x += 1,
+                Direction::Up => pos.y += 1,
+                Direction::Down => pos.y -= 1,
+            }
         }
     }
 }
@@ -173,6 +175,7 @@ impl Size {
 
 struct DangerNoodleHead {
     direction: Direction,
+    next_direction: Option<Direction>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
