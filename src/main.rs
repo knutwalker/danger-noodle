@@ -1,13 +1,20 @@
 #![warn(clippy::complexity)]
 
 use bevy::prelude::*;
+use bevy::render::pass::ClearColor;
 
 const ARENA_WIDTH: u32 = 10;
 const ARENA_HEIGHT: u32 = 10;
 
 fn main() {
     App::build()
-        .add_startup_system(set_title.system())
+        .add_resource(WindowDescriptor {
+            title: "Danger! noooodle".to_string(),
+            width: 2000,
+            height: 2000,
+            ..Default::default()
+        })
+        .add_resource(ClearColor(Color::hex("BADA55").unwrap()))
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup")
         .add_startup_system_to_stage("game_setup", game_setup.system())
@@ -16,11 +23,6 @@ fn main() {
         .add_system(size_scaling.system())
         .add_plugins(DefaultPlugins)
         .run();
-}
-
-fn set_title(mut windows: ResMut<Windows>) {
-    let window = windows.get_primary_mut().unwrap();
-    window.set_title("Danger! noooodle".into());
 }
 
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
