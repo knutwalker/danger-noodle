@@ -4,6 +4,7 @@ use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
 use rand::prelude::*;
 use std::{
+    ops::Neg,
     ops::{Deref, DerefMut},
     time::Duration,
 };
@@ -13,20 +14,25 @@ const ARENA_HEIGHT: u32 = 10;
 
 fn main() {
     App::build()
+        .add_resource(ClearColor(Color::hex("BADA55").unwrap()))
         .add_resource(WindowDescriptor {
             title: "Danger! noooodle".to_string(),
             width: 2000,
             height: 2000,
             ..Default::default()
         })
-        .add_resource(ClearColor(Color::hex("BADA55").unwrap()))
+        .add_resource(DangerNoodleMoveTimer(Timer::new(
+            Duration::from_millis(450),
+            true,
+        )))
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup")
         .add_startup_system_to_stage("game_setup", game_setup.system())
+        .add_system(danger_noodle_timer.system())
         .add_system(danger_noodle_movement.system())
+        .add_system(food_spawner.system())
         .add_system(position_translation.system())
         .add_system(size_scaling.system())
-        .add_system(food_spawner.system())
         .add_plugins(DefaultPlugins)
         .run();
 }
@@ -46,7 +52,9 @@ fn game_setup(mut commands: Commands, materials: Res<Materials>) {
             sprite: Sprite::new(Vec2::new(10.0, 10.0)),
             ..Default::default()
         })
-        .with(DangerNoodleHead)
+        .with(DangerNoodleHead {
+            direction: Direction::Up,
+        })
         .with(Position { x: 3, y: 3 })
         .with(Size::square(0.8));
 }
@@ -75,22 +83,42 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
     }
 }
 
+fn danger_noodle_timer(time: Res<Time>, mut danger_noodle_timer: ResMut<DangerNoodleMoveTimer>) {
+    danger_noodle_timer.tick(time.delta_seconds)
+}
+
 fn danger_noodle_movement(
     keyboard_input: Res<Input<KeyCode>>,
-    mut head_positions: Query<(&DangerNoodleHead, &mut Position)>,
+    danger_noodle_timer: ResMut<DangerNoodleMoveTimer>,
+    mut heads: Query<(Entity, &mut DangerNoodleHead)>,
+    mut positions: Query<&mut Position>,
 ) {
-    for (_head, mut pos) in head_positions.iter_mut() {
-        if keyboard_input.pressed(KeyCode::Left) {
-            pos.x -= 1;
+    if !danger_noodle_timer.finished {
+        return;
+    }
+    for (head_entity, mut head) in heads.iter_mut() {
+        let mut head_pos = positions.get_mut(head_entity).unwrap();
+        let current_direction = head.direction;
+        let dir = if keyboard_input.pressed(KeyCode::Left) {
+            Direction::Left
+        } else if keyboard_input.pressed(KeyCode::Right) {
+            Direction::Right
+        } else if keyboard_input.pressed(KeyCode::Down) {
+            Direction::Down
+        } else if keyboard_input.pressed(KeyCode::Up) {
+            Direction::Up
+        } else {
+            current_direction
+        };
+        if dir != -current_direction && dir != current_direction {
+            head.direction = dir;
         }
-        if keyboard_input.pressed(KeyCode::Right) {
-            pos.x += 1;
-        }
-        if keyboard_input.pressed(KeyCode::Down) {
-            pos.y -= 1;
-        }
-        if keyboard_input.pressed(KeyCode::Up) {
-            pos.y += 1;
+
+        match head.direction {
+            Direction::Left => head_pos.x -= 1,
+            Direction::Right => head_pos.x += 1,
+            Direction::Up => head_pos.y += 1,
+            Direction::Down => head_pos.y -= 1,
         }
     }
 }
@@ -113,7 +141,7 @@ fn food_spawner(
                 x: (random::<f32>() * ARENA_WIDTH as f32) as i32,
                 y: (random::<f32>() * ARENA_HEIGHT as f32) as i32,
             })
-            .with(Size::square(0.8));
+            .with(Size::square(0.7));
     }
 }
 
@@ -121,8 +149,6 @@ struct Materials {
     head_material: Handle<ColorMaterial>,
     food_material: Handle<ColorMaterial>,
 }
-
-struct DangerNoodleHead;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 struct Position {
@@ -142,6 +168,46 @@ impl Size {
             width: x,
             height: x,
         }
+    }
+}
+
+struct DangerNoodleHead {
+    direction: Direction,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum Direction {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+impl Neg for Direction {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+            Self::Up => Self::Down,
+            Self::Down => Self::Up,
+        }
+    }
+}
+
+struct DangerNoodleMoveTimer(Timer);
+
+impl Deref for DangerNoodleMoveTimer {
+    type Target = Timer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for DangerNoodleMoveTimer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
