@@ -189,19 +189,32 @@ fn food_spawner(
     materials: Res<Materials>,
     time: Res<Time>,
     mut timer: Local<FoodSpawnTimer>,
+    positions: Query<&Position>,
 ) {
     timer.tick(time.delta_seconds);
     if timer.finished {
+        let mut attempts = 0;
+        let pos = loop {
+            let pos = Position {
+                x: (random::<f32>() * ARENA_WIDTH as f32) as i32,
+                y: (random::<f32>() * ARENA_HEIGHT as f32) as i32,
+            };
+            if !positions.iter().any(|p| *p == pos) {
+                break pos;
+            }
+            attempts += 1;
+            if attempts > 42 {
+                return;
+            }
+        };
+
         commands
             .spawn(SpriteComponents {
                 material: materials.food_material.clone(),
                 ..Default::default()
             })
             .with(Food)
-            .with(Position {
-                x: (random::<f32>() * ARENA_WIDTH as f32) as i32,
-                y: (random::<f32>() * ARENA_HEIGHT as f32) as i32,
-            })
+            .with(pos)
             .with(Size::square(0.7));
     }
 }
@@ -324,7 +337,7 @@ struct Food;
 struct FoodSpawnTimer(Timer);
 impl Default for FoodSpawnTimer {
     fn default() -> Self {
-        Self(Timer::new(Duration::from_millis(1000), true))
+        Self(Timer::new(Duration::from_millis(3000), true))
     }
 }
 
