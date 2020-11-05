@@ -126,6 +126,19 @@ fn danger_noodle_moves(
                 Direction::Up => pos.y += 1,
                 Direction::Down => pos.y -= 1,
             }
+            if pos.x < 0 {
+                pos.x = ARENA_WIDTH as i32 - 1;
+            }
+            if pos.x as u32 >= ARENA_WIDTH {
+                pos.x = 0;
+            }
+            if pos.y < 0 {
+                pos.y = ARENA_HEIGHT as i32 - 1
+            }
+            if pos.y as u32 >= ARENA_HEIGHT {
+                pos.y = 0;
+            }
+
             // update tails
             let head_pos = *pos;
             for (_segment, mut segment_pos) in segments.iter_mut() {
