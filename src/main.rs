@@ -2,6 +2,11 @@
 
 use bevy::prelude::*;
 use bevy::render::pass::ClearColor;
+use rand::prelude::*;
+use std::{
+    ops::{Deref, DerefMut},
+    time::Duration,
+};
 
 const ARENA_WIDTH: u32 = 10;
 const ARENA_HEIGHT: u32 = 10;
@@ -21,6 +26,7 @@ fn main() {
         .add_system(danger_noodle_movement.system())
         .add_system(position_translation.system())
         .add_system(size_scaling.system())
+        .add_system(food_spawner.system())
         .add_plugins(DefaultPlugins)
         .run();
 }
@@ -29,6 +35,7 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     commands.spawn(Camera2dComponents::default());
     commands.insert_resource(Materials {
         head_material: materials.add(Color::hex("F00B42").unwrap().into()),
+        food_material: materials.add(Color::hex("BA6E15").unwrap().into()),
     });
 }
 
@@ -88,10 +95,34 @@ fn danger_noodle_movement(
     }
 }
 
-struct DangerNoodleHead;
+fn food_spawner(
+    mut commands: Commands,
+    materials: Res<Materials>,
+    time: Res<Time>,
+    mut timer: Local<FoodSpawnTimer>,
+) {
+    timer.tick(time.delta_seconds);
+    if timer.finished {
+        commands
+            .spawn(SpriteComponents {
+                material: materials.food_material.clone(),
+                ..Default::default()
+            })
+            .with(Food)
+            .with(Position {
+                x: (random::<f32>() * ARENA_WIDTH as f32) as i32,
+                y: (random::<f32>() * ARENA_HEIGHT as f32) as i32,
+            })
+            .with(Size::square(0.8));
+    }
+}
+
 struct Materials {
     head_material: Handle<ColorMaterial>,
+    food_material: Handle<ColorMaterial>,
 }
+
+struct DangerNoodleHead;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 struct Position {
@@ -111,5 +142,28 @@ impl Size {
             width: x,
             height: x,
         }
+    }
+}
+
+struct Food;
+
+struct FoodSpawnTimer(Timer);
+impl Default for FoodSpawnTimer {
+    fn default() -> Self {
+        Self(Timer::new(Duration::from_millis(1000), true))
+    }
+}
+
+impl Deref for FoodSpawnTimer {
+    type Target = Timer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for FoodSpawnTimer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
