@@ -25,6 +25,7 @@ fn main() {
             Duration::from_millis(450),
             true,
         )))
+        .add_resource(DangerNoodleSegments::default())
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup")
         .add_startup_system_to_stage("game_setup", game_setup.system())
@@ -40,12 +41,23 @@ fn main() {
 fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     commands.spawn(Camera2dComponents::default());
     commands.insert_resource(Materials {
-        head_material: materials.add(Color::hex("F00B42").unwrap().into()),
+        head_material: materials.add(Color::hex("F00D13").unwrap().into()),
+        segment_material: materials.add(Color::hex("1E66ED").unwrap().into()),
         food_material: materials.add(Color::hex("BA6E15").unwrap().into()),
     });
 }
 
-fn game_setup(mut commands: Commands, materials: Res<Materials>) {
+fn game_setup(
+    mut commands: Commands,
+    materials: Res<Materials>,
+    mut segments: ResMut<DangerNoodleSegments>,
+) {
+    let first_segment = spawn_segment(
+        &mut commands,
+        &materials.segment_material,
+        Position { x: 3, y: 2 },
+    );
+    segments.push(first_segment);
     commands
         .spawn(SpriteComponents {
             material: materials.head_material.clone(),
@@ -92,6 +104,7 @@ fn danger_noodle_movement(
     keyboard_input: Res<Input<KeyCode>>,
     danger_noodle_timer: ResMut<DangerNoodleMoveTimer>,
     mut heads: Query<(&mut DangerNoodleHead, &mut Position)>,
+    mut segments: Query<(&DangerNoodleSegment, &mut Position)>,
 ) {
     let dir: Option<Direction> = keyboard_input
         .get_pressed()
@@ -113,6 +126,12 @@ fn danger_noodle_movement(
             }
         }
         if danger_noodle_timer.finished {
+            // update tails
+            let mut last_pos = *pos;
+            for (_segment, mut segment_pos) in segments.iter_mut() {
+                last_pos = std::mem::replace(&mut *segment_pos, last_pos);
+            }
+            // update head
             let dir = head.next_direction.take().unwrap_or(head.direction);
             head.direction = dir;
             match dir {
@@ -123,6 +142,22 @@ fn danger_noodle_movement(
             }
         }
     }
+}
+
+fn spawn_segment(
+    commands: &mut Commands,
+    material: &Handle<ColorMaterial>,
+    position: Position,
+) -> Entity {
+    commands
+        .spawn(SpriteComponents {
+            material: material.clone(),
+            ..Default::default()
+        })
+        .with(DangerNoodleSegment)
+        .with(position)
+        .with(Size::square(0.65));
+    commands.current_entity().unwrap()
 }
 
 fn food_spawner(
@@ -149,6 +184,7 @@ fn food_spawner(
 
 struct Materials {
     head_material: Handle<ColorMaterial>,
+    segment_material: Handle<ColorMaterial>,
     food_material: Handle<ColorMaterial>,
 }
 
@@ -209,6 +245,25 @@ impl Deref for DangerNoodleMoveTimer {
 }
 
 impl DerefMut for DangerNoodleMoveTimer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+struct DangerNoodleSegment;
+
+#[derive(Debug, Default)]
+struct DangerNoodleSegments(Vec<Entity>);
+
+impl Deref for DangerNoodleSegments {
+    type Target = Vec<Entity>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for DangerNoodleSegments {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
