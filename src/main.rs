@@ -26,12 +26,16 @@ fn main() {
             true,
         )))
         .add_resource(DangerNoodleSegments::default())
+        .add_resource(LastTailPosition::default())
+        .add_event::<GrowthEvent>()
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup")
         .add_startup_system_to_stage("game_setup", game_setup.system())
         .add_system(danger_noodle_timer.system())
-        .add_system(danger_noodle_movement.system())
+        .add_system(danger_noodle_moves.system())
         .add_system(food_spawner.system())
+        .add_system(danger_noodle_eats.system())
+        .add_system(danger_noodle_grows.system())
         .add_system(position_translation.system())
         .add_system(size_scaling.system())
         .add_plugins(DefaultPlugins)
@@ -100,9 +104,10 @@ fn danger_noodle_timer(time: Res<Time>, mut danger_noodle_timer: ResMut<DangerNo
     danger_noodle_timer.tick(time.delta_seconds)
 }
 
-fn danger_noodle_movement(
+fn danger_noodle_moves(
     keyboard_input: Res<Input<KeyCode>>,
     danger_noodle_timer: ResMut<DangerNoodleMoveTimer>,
+    mut last_tail_pos: ResMut<LastTailPosition>,
     mut heads: Query<(&mut DangerNoodleHead, &mut Position)>,
     mut segments: Query<(&DangerNoodleSegment, &mut Position)>,
 ) {
@@ -131,6 +136,7 @@ fn danger_noodle_movement(
             for (_segment, mut segment_pos) in segments.iter_mut() {
                 last_pos = std::mem::replace(&mut *segment_pos, last_pos);
             }
+            **last_tail_pos = last_pos;
             // update head
             let dir = head.next_direction.take().unwrap_or(head.direction);
             head.direction = dir;
@@ -141,6 +147,39 @@ fn danger_noodle_movement(
                 Direction::Down => pos.y -= 1,
             }
         }
+    }
+}
+
+fn danger_noodle_eats(
+    mut commands: Commands,
+    danger_noodle_timer: Res<DangerNoodleMoveTimer>,
+    mut growth_events: ResMut<Events<GrowthEvent>>,
+    food_positions: Query<With<Food, (Entity, &Position)>>,
+    head_positions: Query<With<DangerNoodleHead, &Position>>,
+) {
+    if !danger_noodle_timer.finished {
+        return;
+    }
+    for head_pos in head_positions.iter() {
+        for (ent, food_pos) in food_positions.iter() {
+            if food_pos == head_pos {
+                commands.despawn(ent);
+                growth_events.send(GrowthEvent);
+            }
+        }
+    }
+}
+
+fn danger_noodle_grows(
+    mut commands: Commands,
+    materials: Res<Materials>,
+    growth_events: Res<Events<GrowthEvent>>,
+    mut growth_reader: Local<EventReader<GrowthEvent>>,
+    last_tail_pos: Res<LastTailPosition>,
+) {
+    if growth_reader.iter(&growth_events).next().is_some() {
+        let last_position = **last_tail_pos;
+        spawn_segment(&mut commands, &materials.segment_material, last_position);
     }
 }
 
@@ -287,6 +326,26 @@ impl Deref for FoodSpawnTimer {
 }
 
 impl DerefMut for FoodSpawnTimer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Debug)]
+struct GrowthEvent;
+
+#[derive(Debug, Default)]
+struct LastTailPosition(Position);
+
+impl Deref for LastTailPosition {
+    type Target = Position;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for LastTailPosition {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
