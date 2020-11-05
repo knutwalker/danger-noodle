@@ -25,7 +25,6 @@ fn main() {
             Duration::from_millis(450),
             true,
         )))
-        .add_resource(DangerNoodleSegments::default())
         .add_resource(LastTailPosition::default())
         .add_event::<GrowthEvent>()
         .add_event::<GameOverEvent>()
@@ -53,12 +52,8 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     });
 }
 
-fn game_setup(
-    commands: Commands,
-    materials: Res<Materials>,
-    segments: ResMut<DangerNoodleSegments>,
-) {
-    spawn_new_danger_noodle(commands, &materials, segments);
+fn game_setup(commands: Commands, materials: Res<Materials>) {
+    spawn_new_danger_noodle(commands, &materials);
 }
 
 fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Sprite)>) {
@@ -178,11 +173,7 @@ fn danger_noodle_grows(
     }
 }
 
-fn spawn_segment(
-    commands: &mut Commands,
-    material: &Handle<ColorMaterial>,
-    position: Position,
-) -> Entity {
+fn spawn_segment(commands: &mut Commands, material: &Handle<ColorMaterial>, position: Position) {
     commands
         .spawn(SpriteComponents {
             material: material.clone(),
@@ -191,7 +182,6 @@ fn spawn_segment(
         .with(DangerNoodleSegment)
         .with(position)
         .with(Size::square(0.65));
-    commands.current_entity().unwrap()
 }
 
 fn food_spawner(
@@ -221,7 +211,6 @@ fn game_over(
     mut reader: Local<EventReader<GameOverEvent>>,
     game_over_events: Res<Events<GameOverEvent>>,
     materials: Res<Materials>,
-    segments_res: ResMut<DangerNoodleSegments>,
     segments: Query<(Entity, &DangerNoodleSegment)>,
     foods: Query<(Entity, &Food)>,
     heads: Query<(Entity, &DangerNoodleHead)>,
@@ -236,21 +225,16 @@ fn game_over(
         for (ent, _) in heads.iter() {
             commands.despawn(ent);
         }
-        spawn_new_danger_noodle(commands, &materials, segments_res);
+        spawn_new_danger_noodle(commands, &materials);
     }
 }
 
-fn spawn_new_danger_noodle(
-    mut commands: Commands,
-    materials: &Materials,
-    mut segments: ResMut<DangerNoodleSegments>,
-) {
-    let first_segment = spawn_segment(
+fn spawn_new_danger_noodle(mut commands: Commands, materials: &Materials) {
+    spawn_segment(
         &mut commands,
         &materials.segment_material,
         Position { x: 3, y: 2 },
     );
-    **segments = vec![first_segment];
     commands
         .spawn(SpriteComponents {
             material: materials.head_material.clone(),
@@ -334,23 +318,6 @@ impl DerefMut for DangerNoodleMoveTimer {
 }
 
 struct DangerNoodleSegment;
-
-#[derive(Debug, Default)]
-struct DangerNoodleSegments(Vec<Entity>);
-
-impl Deref for DangerNoodleSegments {
-    type Target = Vec<Entity>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for DangerNoodleSegments {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 struct Food;
 
