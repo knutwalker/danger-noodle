@@ -18,8 +18,8 @@ fn main() {
         .add_resource(ClearColor(Color::hex("BADA55").unwrap()))
         .add_resource(WindowDescriptor {
             title: "Danger! noooodle".to_string(),
-            width: 2000,
-            height: 2000,
+            width: 1000.0,
+            height: 1000.0,
             resizable: false,
             cursor_visible: false,
             ..Default::default()
@@ -32,8 +32,7 @@ fn main() {
         .add_event::<GrowthEvent>()
         .add_event::<GameOverEvent>()
         .add_startup_system(setup.system())
-        .add_startup_stage("game_setup")
-        .add_startup_system_to_stage("game_setup", game_setup.system())
+        .add_startup_stage("game_setup", SystemStage::single(game_setup.system()))
         .add_system(danger_noodle_timer.system())
         .add_system(danger_noodle_moves.system())
         .add_system(food_spawner.system())
@@ -46,8 +45,8 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
-    commands.spawn(Camera2dComponents::default());
+fn setup(commands: &mut Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
+    commands.spawn(Camera2dBundle::default());
     commands.insert_resource(Materials {
         head_material: materials.add(Color::hex("F00D13").unwrap().into()),
         segment_material: materials.add(Color::hex("1E66ED").unwrap().into()),
@@ -55,13 +54,13 @@ fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
     });
 }
 
-fn game_setup(commands: Commands, materials: Res<Materials>) {
+fn game_setup(commands: &mut Commands, materials: Res<Materials>) {
     spawn_new_danger_noodle(commands, &materials);
 }
 
 fn size_scaling(windows: Res<Windows>, mut q: Query<(&Size, &mut Sprite)>) {
+    let window = windows.get_primary().unwrap();
     for (size, mut sprite) in q.iter_mut() {
-        let window = windows.get_primary().unwrap();
         sprite.size = Vec2::new(
             size.width as f32 / ARENA_WIDTH as f32 * window.width() as f32,
             size.height as f32 / ARENA_HEIGHT as f32 * window.height() as f32,
@@ -84,7 +83,7 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
 }
 
 fn danger_noodle_timer(time: Res<Time>, mut danger_noodle_timer: ResMut<DangerNoodleMoveTimer>) {
-    danger_noodle_timer.tick(time.delta_seconds)
+    danger_noodle_timer.tick(time.delta_seconds());
 }
 
 fn danger_noodle_moves(
@@ -93,7 +92,7 @@ fn danger_noodle_moves(
     mut last_tail_pos: ResMut<LastTailPosition>,
     mut game_over_events: ResMut<Events<GameOverEvent>>,
     mut heads: Query<(&mut DangerNoodleHead, &mut Position)>,
-    mut segments: Query<(&DangerNoodleSegment, &mut Position)>,
+    mut segments: Query<&mut Position, With<DangerNoodleSegment>>,
 ) {
     let dir: Option<Direction> = keyboard_input
         .get_just_pressed()
@@ -110,7 +109,7 @@ fn danger_noodle_moves(
         if let Some(dir) = dir {
             head.next_directions.push_back(dir);
         }
-        if danger_noodle_timer.finished {
+        if danger_noodle_timer.finished() {
             // update head
             let mut next_seg_pos = *pos;
             let dir = loop {
@@ -143,7 +142,7 @@ fn danger_noodle_moves(
 
             // update tails
             let head_pos = *pos;
-            for (_segment, mut segment_pos) in segments.iter_mut() {
+            for mut segment_pos in segments.iter_mut() {
                 if next_seg_pos == head_pos {
                     game_over_events.send(GameOverEvent);
                 }
@@ -160,13 +159,13 @@ fn danger_noodle_moves(
 }
 
 fn danger_noodle_eats(
-    mut commands: Commands,
+    commands: &mut Commands,
     danger_noodle_timer: Res<DangerNoodleMoveTimer>,
     mut growth_events: ResMut<Events<GrowthEvent>>,
-    food_positions: Query<With<Food, (Entity, &Position)>>,
-    head_positions: Query<With<DangerNoodleHead, &Position>>,
+    food_positions: Query<(Entity, &Position), With<Food>>,
+    head_positions: Query<&Position, With<DangerNoodleHead>>,
 ) {
-    if !danger_noodle_timer.finished {
+    if !danger_noodle_timer.finished() {
         return;
     }
     for head_pos in head_positions.iter() {
@@ -180,7 +179,7 @@ fn danger_noodle_eats(
 }
 
 fn danger_noodle_grows(
-    mut commands: Commands,
+    commands: &mut Commands,
     materials: Res<Materials>,
     growth_events: Res<Events<GrowthEvent>>,
     mut growth_reader: Local<EventReader<GrowthEvent>>,
@@ -189,15 +188,16 @@ fn danger_noodle_grows(
 ) {
     if growth_reader.iter(&growth_events).next().is_some() {
         // update danger noodle speed
-        danger_noodle_timer.duration *= 0.98;
+        let duration = danger_noodle_timer.duration();
+        danger_noodle_timer.set_duration(duration * 0.98);
         let last_position = **last_tail_pos;
-        spawn_segment(&mut commands, &materials.segment_material, last_position);
+        spawn_segment(commands, &materials.segment_material, last_position);
     }
 }
 
 fn spawn_segment(commands: &mut Commands, material: &Handle<ColorMaterial>, position: Position) {
     commands
-        .spawn(SpriteComponents {
+        .spawn(SpriteBundle {
             material: material.clone(),
             ..Default::default()
         })
@@ -207,14 +207,14 @@ fn spawn_segment(commands: &mut Commands, material: &Handle<ColorMaterial>, posi
 }
 
 fn food_spawner(
-    mut commands: Commands,
+    commands: &mut Commands,
     materials: Res<Materials>,
     time: Res<Time>,
     mut timer: Local<FoodSpawnTimer>,
     positions: Query<&Position>,
 ) {
-    timer.tick(time.delta_seconds);
-    if timer.finished {
+    timer.tick(time.delta_seconds());
+    if timer.finished() {
         let mut attempts = 0;
         let pos = loop {
             let pos = Position {
@@ -231,7 +231,7 @@ fn food_spawner(
         };
 
         commands
-            .spawn(SpriteComponents {
+            .spawn(SpriteBundle {
                 material: materials.food_material.clone(),
                 ..Default::default()
             })
@@ -242,36 +242,36 @@ fn food_spawner(
 }
 
 fn game_over(
-    mut commands: Commands,
+    commands: &mut Commands,
     mut reader: Local<EventReader<GameOverEvent>>,
     game_over_events: Res<Events<GameOverEvent>>,
     materials: Res<Materials>,
-    segments: Query<(Entity, &DangerNoodleSegment)>,
-    foods: Query<(Entity, &Food)>,
-    heads: Query<(Entity, &DangerNoodleHead)>,
+    segments: Query<Entity, With<DangerNoodleSegment>>,
+    foods: Query<Entity, With<Food>>,
+    heads: Query<Entity, With<DangerNoodleHead>>,
 ) {
     if reader.iter(&game_over_events).next().is_some() {
-        for (ent, _) in segments.iter() {
-            commands.despawn(ent);
+        for segment in segments.iter() {
+            commands.despawn(segment);
         }
-        for (ent, _) in foods.iter() {
-            commands.despawn(ent);
+        for food in foods.iter() {
+            commands.despawn(food);
         }
-        for (ent, _) in heads.iter() {
-            commands.despawn(ent);
+        for head in heads.iter() {
+            commands.despawn(head);
         }
         spawn_new_danger_noodle(commands, &materials);
     }
 }
 
-fn spawn_new_danger_noodle(mut commands: Commands, materials: &Materials) {
+fn spawn_new_danger_noodle(commands: &mut Commands, materials: &Materials) {
     spawn_segment(
-        &mut commands,
+        commands,
         &materials.segment_material,
         Position { x: 3, y: 2 },
     );
     commands
-        .spawn(SpriteComponents {
+        .spawn(SpriteBundle {
             material: materials.head_material.clone(),
             sprite: Sprite::new(Vec2::new(10.0, 10.0)),
             ..Default::default()
