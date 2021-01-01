@@ -20,12 +20,3 @@ features = [
     "bevy_winit",
     "render",
 ]
-
-[profile.release]
-codegen-units = 1
-opt-level = 2
-panic = 'abort'
-lto = true
-debug = false
-debug-assertions = false
-rpath = false
