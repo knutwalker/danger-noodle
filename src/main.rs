@@ -1,7 +1,7 @@
 #![warn(clippy::complexity)]
 
 use bevy::prelude::*;
-use bevy::render::pass::ClearColor;
+use bevy::{app::AppExit, render::pass::ClearColor};
 use rand::prelude::*;
 use std::{
     collections::VecDeque,
@@ -34,6 +34,7 @@ fn main() {
         .add_startup_system(setup.system())
         .add_startup_stage("game_setup", SystemStage::single(game_setup.system()))
         .add_system(danger_noodle_timer.system())
+        .add_system(exit_on_q_or_esc.system())
         .add_system(danger_noodle_moves.system())
         .add_system(food_spawner.system())
         .add_system(danger_noodle_eats.system())
@@ -84,6 +85,18 @@ fn position_translation(windows: Res<Windows>, mut q: Query<(&Position, &mut Tra
 
 fn danger_noodle_timer(time: Res<Time>, mut danger_noodle_timer: ResMut<DangerNoodleMoveTimer>) {
     danger_noodle_timer.tick(time.delta_seconds());
+}
+
+fn exit_on_q_or_esc(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut app_exit_events: ResMut<Events<AppExit>>,
+) {
+    if keyboard_input
+        .get_just_pressed()
+        .any(|input| matches!(input, KeyCode::Q | KeyCode::Escape))
+    {
+        app_exit_events.send(AppExit);
+    }
 }
 
 fn danger_noodle_moves(
