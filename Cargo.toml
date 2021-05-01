@@ -13,7 +13,7 @@ repository = "https://github.com/knutwalker/danger-noodle/"
 rand = "0.7.3"
 
 [dependencies.bevy]
-version = "0.4.0"
+version = "0.5.0"
 default-features = false
 features = [
     "bevy_wgpu",
